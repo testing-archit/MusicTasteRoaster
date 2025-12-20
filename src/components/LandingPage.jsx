@@ -83,7 +83,7 @@ const LandingPage = () => {
                     animate={{ opacity: 1 }}
                     transition={{ delay: 1, duration: 0.5 }}
                 >
-                    We only read your followed artists. No spam, no BS.
+                    We analyze your top artists, tracks, playlists & listening history. No spam, no BS.
                 </motion.p>
             </motion.div>
         </motion.div>

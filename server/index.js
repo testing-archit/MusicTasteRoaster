@@ -53,9 +53,38 @@ setInterval(() => {
     }
 }, 5 * 60 * 1000);
 
+// Helper function to make Spotify API calls with error handling
+const spotifyFetch = async (url, accessToken) => {
+    try {
+        const response = await fetch(url, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+
+        // Check if response is OK
+        if (!response.ok) {
+            console.error(`Spotify API Error for ${url}: ${response.status} ${response.statusText}`);
+            // Return object with error info so we can distinguish error types
+            return { _error: true, status: response.status, statusText: response.statusText };
+        }
+
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error(`Spotify API returned non-JSON response for ${url}`);
+            return { _error: true, status: 'non-json' };
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error(`Failed to fetch ${url}:`, error.message);
+        return { _error: true, status: 'network', message: error.message };
+    }
+};
+
 // API Routes
 app.get("/api/login", (req, res) => {
-    const scope = "user-follow-read";
+    // Comprehensive scopes for full music taste analysis
+    const scope = "user-follow-read user-top-read user-read-recently-played playlist-read-private user-library-read";
     const authUrl = new URL("https://accounts.spotify.com/authorize");
     authUrl.searchParams.set("response_type", "code");
     authUrl.searchParams.set("client_id", SPOTIFY_CLIENT_ID);
@@ -103,52 +132,207 @@ app.get("/callback", async (req, res) => {
             throw new Error(`Spotify Auth Error: ${token.error_description || token.error}`);
         }
 
-        // Get followed artists
-        const followRes = await fetch(
-            "https://api.spotify.com/v1/me/following?type=artist&limit=20",
-            { headers: { Authorization: `Bearer ${token.access_token}` } }
-        );
+        const accessToken = token.access_token;
 
-        const spotifyData = await followRes.json();
+        // Fetch all data in parallel for comprehensive roasting
+        console.log("\n📊 Fetching comprehensive Spotify data...\n");
 
-        if (spotifyData.error) {
-            throw new Error(`Spotify API Error: ${spotifyData.error.message}`);
+        const [
+            followedArtists,
+            topArtistsShort,
+            topArtistsMedium,
+            topArtistsLong,
+            topTracksShort,
+            topTracksMedium,
+            topTracksLong,
+            recentlyPlayed,
+            playlists,
+            savedTracks
+        ] = await Promise.all([
+            spotifyFetch("https://api.spotify.com/v1/me/following?type=artist&limit=20", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/top/artists?time_range=short_term&limit=10", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/top/artists?time_range=medium_term&limit=10", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/top/artists?time_range=long_term&limit=10", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=15", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=15", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/top/tracks?time_range=long_term&limit=15", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/player/recently-played?limit=30", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/playlists?limit=20", accessToken),
+            spotifyFetch("https://api.spotify.com/v1/me/tracks?limit=30", accessToken)
+        ]);
+
+        // Check if all API calls failed with 403 (user not on allowlist)
+        const allResults = [followedArtists, topArtistsShort, topArtistsMedium, topArtistsLong,
+            topTracksShort, topTracksMedium, topTracksLong, recentlyPlayed, playlists, savedTracks];
+        const forbiddenCount = allResults.filter(r => r?._error && r?.status === 403).length;
+
+        if (forbiddenCount >= 5) {
+            // Most/all APIs returned 403 - user not on allowlist
+            console.error("❌ Most API calls returned 403 Forbidden - user likely not on Spotify app allowlist");
+            return res.redirect(`${CLIENT_URL}/error?message=${encodeURIComponent("Access denied! The Spotify app is in Development Mode. Your Spotify email needs to be added to the app's allowlist in the Spotify Developer Dashboard.")}`);
         }
 
-        const artistItems = spotifyData?.artists?.items || [];
+        // Helper to safely extract data (ignore error objects)
+        const safeData = (data) => (data?._error ? null : data);
 
-        if (artistItems.length === 0) {
-            return res.redirect(`${CLIENT_URL}/error?message=${encodeURIComponent("You don't follow any artists on Spotify. Follow some artists first!")}`);
-        }
-
-        const artists = artistItems.map((a) => ({
+        // Process followed artists
+        const followedArtistsList = (safeData(followedArtists)?.artists?.items || []).map(a => ({
             name: a.name,
-            genres: a.genres?.join(", ") || "Unknown",
-            popularity: a.popularity || 0,
-            followers: a.followers?.total || 0,
+            genres: a.genres?.slice(0, 3).join(", ") || "Unknown",
+            popularity: a.popularity || 0
         }));
 
-        const prompt = `Roast my music taste brutally. Be sarcastic. No compliments. Use hindi as well. It should be very desi. It can be brutal as well and use bad words like chutiya.
+        // Process top artists by time range
+        const processTopArtists = (data) => (safeData(data)?.items || []).map(a => ({
+            name: a.name,
+            genres: a.genres?.slice(0, 2).join(", ") || "Unknown",
+            popularity: a.popularity || 0
+        }));
 
-Here are the artists I follow:
+        const topArtistsShortList = processTopArtists(topArtistsShort);
+        const topArtistsMediumList = processTopArtists(topArtistsMedium);
+        const topArtistsLongList = processTopArtists(topArtistsLong);
 
-${artists.map((a, i) => `${i + 1}. ${a.name} (Genres: ${a.genres}, Popularity: ${a.popularity}, Followers: ${a.followers})`).join("\n")}
+        // Process top tracks by time range
+        const processTopTracks = (data) => (safeData(data)?.items || []).map(t => ({
+            name: t.name,
+            artist: t.artists?.[0]?.name || "Unknown",
+            popularity: t.popularity || 0
+        }));
 
-Give me a brutal roast in a mix of Hindi and English.`;
+        const topTracksShortList = processTopTracks(topTracksShort);
+        const topTracksMediumList = processTopTracks(topTracksMedium);
+        const topTracksLongList = processTopTracks(topTracksLong);
 
-        const aiResponse = await genAI.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-        });
+        // Process recently played
+        const recentlyPlayedList = (safeData(recentlyPlayed)?.items || []).map(item => ({
+            name: item.track?.name || "Unknown",
+            artist: item.track?.artists?.[0]?.name || "Unknown"
+        }));
 
-        const roast = aiResponse.text || "Bhai, tere taste itna bekar hai ki AI bhi speechless ho gaya! 😂";
+        // Get unique recent artists (for pattern detection)
+        const recentArtists = [...new Set(recentlyPlayedList.map(t => t.artist))].slice(0, 10);
+
+        // Process playlists (names reveal a lot about taste!)
+        const playlistNames = (safeData(playlists)?.items || [])
+            .filter(p => p.name) // Filter out null names
+            .map(p => ({
+                name: p.name,
+                trackCount: p.tracks?.total || 0,
+                isPublic: p.public
+            }));
+
+        // Process saved/liked tracks
+        const savedTracksList = (safeData(savedTracks)?.items || []).map(item => ({
+            name: item.track?.name || "Unknown",
+            artist: item.track?.artists?.[0]?.name || "Unknown"
+        }));
+
+        // Log data summary
+        console.log("📈 Data Summary:");
+        console.log(`   - Followed Artists: ${followedArtistsList.length}`);
+        console.log(`   - Top Artists (Recent): ${topArtistsShortList.length}`);
+        console.log(`   - Top Artists (6 months): ${topArtistsMediumList.length}`);
+        console.log(`   - Top Artists (All time): ${topArtistsLongList.length}`);
+        console.log(`   - Top Tracks (Recent): ${topTracksShortList.length}`);
+        console.log(`   - Top Tracks (6 months): ${topTracksMediumList.length}`);
+        console.log(`   - Top Tracks (All time): ${topTracksLongList.length}`);
+        console.log(`   - Recently Played: ${recentlyPlayedList.length}`);
+        console.log(`   - Playlists: ${playlistNames.length}`);
+        console.log(`   - Saved Tracks: ${savedTracksList.length}\n`);
+
+        // Check if we have enough data to roast
+        const totalDataPoints = followedArtistsList.length +
+            topArtistsShortList.length + topArtistsMediumList.length + topArtistsLongList.length +
+            topTracksShortList.length + topTracksMediumList.length + topTracksLongList.length +
+            recentlyPlayedList.length + playlistNames.length + savedTracksList.length;
+
+        if (totalDataPoints === 0) {
+            return res.redirect(`${CLIENT_URL}/error?message=${encodeURIComponent("You don't have enough listening history on Spotify. Listen to more music first!")}`);
+        }
+
+        // Build comprehensive prompt for AI
+        const prompt = `You are the most savage, brutally honest music critic from India. Roast this person's music taste without mercy. Be sarcastic, use creative insults, mix Hindi and English (Hinglish), and don't hold back. Use desi references and slang. You can use bad words like chutiya, bkl, etc. Make it personal based on the data. Keep it around 200-300 words.Dont forget to add that its made by your friend/hater whatever you wanna call "Archit"
+
+Here's everything about their music taste:
+
+🎯 TOP ARTISTS RIGHT NOW (Last 4 weeks - what they're OBSESSED with):
+${topArtistsShortList.length > 0 ? topArtistsShortList.map((a, i) => `${i + 1}. ${a.name} (${a.genres})`).join("\n") : "No recent top artists (suspicious...)"}
+
+🎯 TOP ARTISTS (Last 6 months):
+${topArtistsMediumList.length > 0 ? topArtistsMediumList.map((a, i) => `${i + 1}. ${a.name} (${a.genres})`).join("\n") : "No data"}
+
+🎯 TOP ARTISTS ALL TIME (Their true colors):
+${topArtistsLongList.length > 0 ? topArtistsLongList.map((a, i) => `${i + 1}. ${a.name} (${a.genres})`).join("\n") : "No data"}
+
+🎵 TOP SONGS RIGHT NOW (What they can't stop playing):
+${topTracksShortList.length > 0 ? topTracksShortList.slice(0, 10).map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`).join("\n") : "No recent top tracks"}
+
+🎵 ALL-TIME FAVORITE SONGS (The songs that define them):
+${topTracksLongList.length > 0 ? topTracksLongList.slice(0, 10).map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`).join("\n") : "No data"}
+
+⏱️ RECENTLY PLAYED (Last few hours - caught red-handed):
+${recentlyPlayedList.length > 0 ? recentlyPlayedList.slice(0, 10).map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`).join("\n") : "No recent plays"}
+
+📁 THEIR PLAYLISTS (Names tell everything):
+${playlistNames.length > 0 ? playlistNames.slice(0, 15).map(p => `- "${p.name}" (${p.trackCount} tracks${!p.isPublic ? ", hidden from public 👀" : ""})`).join("\n") : "No playlists (doesn't even curate music, just vibes randomly)"}
+
+💚 SAVED/LIKED SONGS (What they think are bangers):
+${savedTracksList.length > 0 ? savedTracksList.slice(0, 10).map((t, i) => `${i + 1}. "${t.name}" by ${t.artist}`).join("\n") : "No saved tracks (doesn't even commit to liking songs)"}
+
+👥 ARTISTS THEY FOLLOW:
+${followedArtistsList.length > 0 ? followedArtistsList.map(a => a.name).join(", ") : "Follows nobody (too cool to commit?)"}
+
+Now DESTROY their music taste. Point out embarrassing patterns, guilty pleasures, basic choices, weird combinations, or anything roast-worthy. Be creative and brutal!`;
+
+        let roast;
+        try {
+            const aiResponse = await genAI.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+            });
+
+            // Try to get text from response - the SDK structure can vary
+            if (typeof aiResponse.text === 'string') {
+                roast = aiResponse.text;
+            } else if (aiResponse.response?.text) {
+                roast = typeof aiResponse.response.text === 'function'
+                    ? aiResponse.response.text()
+                    : aiResponse.response.text;
+            } else if (aiResponse.candidates?.[0]?.content?.parts?.[0]?.text) {
+                roast = aiResponse.candidates[0].content.parts[0].text;
+            } else {
+                console.log("AI Response structure:", JSON.stringify(aiResponse, null, 2));
+                roast = "Bhai, AI thoda confuse ho gaya, but tera taste toh bekar hai hi! 😂";
+            }
+        } catch (aiError) {
+            console.error("AI Error:", aiError.message);
+            roast = "Bhai, tere taste itna bekar hai ki AI bhi speechless ho gaya! 😂";
+        }
 
         console.log("\n🔥🔥🔥 MUSIC TASTE ROAST 🔥🔥🔥\n");
         console.log(roast);
         console.log("\n🔥🔥🔥 END 🔥🔥🔥\n");
 
+        // Prepare summary data for frontend display
+        const dataSummary = {
+            topArtists: topArtistsShortList.slice(0, 5),
+            topTracks: topTracksShortList.slice(0, 5),
+            recentlyPlayed: recentlyPlayedList.slice(0, 5),
+            playlists: playlistNames.slice(0, 5).map(p => p.name),
+            followedArtists: followedArtistsList.slice(0, 10),
+            stats: {
+                totalTopArtists: topArtistsShortList.length + topArtistsMediumList.length + topArtistsLongList.length,
+                totalTopTracks: topTracksShortList.length + topTracksMediumList.length + topTracksLongList.length,
+                totalPlaylists: playlistNames.length,
+                totalRecentlyPlayed: recentlyPlayedList.length,
+                totalSavedTracks: savedTracksList.length,
+                followedCount: followedArtistsList.length
+            }
+        };
+
         // Encode roast data as base64 and pass via URL
-        const roastData = JSON.stringify({ roast, artists });
+        const roastData = JSON.stringify({ roast, dataSummary });
         const encoded = Buffer.from(roastData).toString('base64url');
 
         // Redirect to frontend with encoded data
