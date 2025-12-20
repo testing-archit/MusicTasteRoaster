@@ -29,7 +29,7 @@ const getLocalIP = () => {
 };
 
 const LOCAL_IP = getLocalIP();
-const REDIRECT_URI = `http://${LOCAL_IP}:${PORT}/callback`;
+const REDIRECT_URI = "http://127.0.0.1:3000/callback";
 
 const genAI = new GoogleGenAI({ apiKey: GOOGLE_API_KEY });
 
@@ -261,7 +261,7 @@ ${artists.map((a, i) => `${i + 1}. ${a.name} (Genres: ${a.genres}, Popularity: $
 Give me a brutal roast in a mix of Hindi and English.`;
 
         const aiResponse = await genAI.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             contents: prompt
         });
 
