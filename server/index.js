@@ -346,15 +346,160 @@ Now DESTROY their music taste. Point out embarrassing patterns, guilty pleasures
     }
 });
 
+// ==================== APPLE MUSIC ENDPOINTS ====================
+
+// Apple Music credentials (optional)
+const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID;
+const APPLE_KEY_ID = process.env.APPLE_KEY_ID;
+const APPLE_PRIVATE_KEY = process.env.APPLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+// Generate Apple Music Developer Token (JWT)
+app.get("/api/apple/token", async (req, res) => {
+    if (!APPLE_TEAM_ID || !APPLE_KEY_ID || !APPLE_PRIVATE_KEY) {
+        return res.status(500).json({
+            error: "Apple Music not configured",
+            message: "Please add APPLE_TEAM_ID, APPLE_KEY_ID, and APPLE_PRIVATE_KEY to .env"
+        });
+    }
+
+    try {
+        // Create JWT for Apple Music
+        const now = Math.floor(Date.now() / 1000);
+        const header = {
+            alg: 'ES256',
+            kid: APPLE_KEY_ID
+        };
+        const payload = {
+            iss: APPLE_TEAM_ID,
+            iat: now,
+            exp: now + (60 * 60 * 24 * 180), // 180 days (max allowed)
+        };
+
+        // Base64url encode
+        const base64url = (obj) => Buffer.from(JSON.stringify(obj))
+            .toString('base64')
+            .replace(/=/g, '')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_');
+
+        const headerEncoded = base64url(header);
+        const payloadEncoded = base64url(payload);
+        const signatureInput = `${headerEncoded}.${payloadEncoded}`;
+
+        // Sign with ES256
+        const sign = crypto.createSign('SHA256');
+        sign.update(signatureInput);
+        const signature = sign.sign(APPLE_PRIVATE_KEY, 'base64')
+            .replace(/=/g, '')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_');
+
+        const developerToken = `${signatureInput}.${signature}`;
+
+        res.json({ developerToken });
+    } catch (error) {
+        console.error("Apple Token Error:", error);
+        res.status(500).json({ error: "Failed to generate Apple Music token" });
+    }
+});
+
+// Generate roast from Apple Music data
+app.post("/api/apple/roast", async (req, res) => {
+    try {
+        const { recentlyPlayed, heavyRotation, playlists, librarySongs } = req.body;
+
+        console.log("\n🍎 Processing Apple Music data...\n");
+        console.log("📈 Data Summary:");
+        console.log(`   - Recently Played: ${recentlyPlayed?.length || 0}`);
+        console.log(`   - Heavy Rotation: ${heavyRotation?.length || 0}`);
+        console.log(`   - Playlists: ${playlists?.length || 0}`);
+        console.log(`   - Library Songs: ${librarySongs?.length || 0}\n`);
+
+        const totalDataPoints = (recentlyPlayed?.length || 0) + (heavyRotation?.length || 0) +
+            (playlists?.length || 0) + (librarySongs?.length || 0);
+
+        if (totalDataPoints === 0) {
+            return res.status(400).json({ error: "No music data found in your Apple Music library" });
+        }
+
+        // Build prompt for Apple Music data
+        const prompt = `You are the most savage, brutally honest music critic from India. Roast this person's Apple Music taste without mercy. Be sarcastic, use creative insults, mix Hindi and English (Hinglish), and don't hold back. Use desi references and slang. You can use bad words like chutiya, bkl, etc. Make it personal based on the data. Keep it around 200-300 words. Dont forget to add that its made by your friend/hater whatever you wanna call "Archit"
+
+Here's everything about their Apple Music taste:
+
+🔥 HEAVY ROTATION (What they're obsessed with):
+${heavyRotation?.length > 0 ? heavyRotation.slice(0, 15).map((item, i) => `${i + 1}. "${item.name}" ${item.artist ? `by ${item.artist}` : ''}`).join("\n") : "Nothing in heavy rotation (doesn't even listen much?)"}
+
+⏱️ RECENTLY PLAYED:
+${recentlyPlayed?.length > 0 ? recentlyPlayed.slice(0, 15).map((item, i) => `${i + 1}. "${item.name}" by ${item.artist}`).join("\n") : "No recent plays"}
+
+📁 THEIR PLAYLISTS:
+${playlists?.length > 0 ? playlists.slice(0, 15).map(p => `- "${p.name}" (${p.trackCount} tracks)`).join("\n") : "No playlists (doesn't even curate music)"}
+
+🎵 LIBRARY SONGS (What they've saved):
+${librarySongs?.length > 0 ? librarySongs.slice(0, 20).map((s, i) => `${i + 1}. "${s.name}" by ${s.artist}`).join("\n") : "Empty library"}
+
+Now DESTROY their music taste. Point out embarrassing patterns, guilty pleasures, basic choices, or anything roast-worthy. Be creative and brutal!`;
+
+        let roast;
+        try {
+            const aiResponse = await genAI.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+            });
+
+            if (typeof aiResponse.text === 'string') {
+                roast = aiResponse.text;
+            } else if (aiResponse.response?.text) {
+                roast = typeof aiResponse.response.text === 'function'
+                    ? aiResponse.response.text()
+                    : aiResponse.response.text;
+            } else if (aiResponse.candidates?.[0]?.content?.parts?.[0]?.text) {
+                roast = aiResponse.candidates[0].content.parts[0].text;
+            } else {
+                roast = "Bhai, AI thoda confuse ho gaya, but tera Apple Music taste toh bekar hai hi! 😂";
+            }
+        } catch (aiError) {
+            console.error("AI Error:", aiError.message);
+            roast = "Bhai, tere taste itna bekar hai ki AI bhi speechless ho gaya! 😂";
+        }
+
+        console.log("\n🔥🔥🔥 APPLE MUSIC ROAST 🔥🔥🔥\n");
+        console.log(roast);
+        console.log("\n🔥🔥🔥 END 🔥🔥🔥\n");
+
+        // Prepare summary data for frontend
+        const dataSummary = {
+            topArtists: heavyRotation?.slice(0, 5) || [],
+            topTracks: recentlyPlayed?.slice(0, 5) || [],
+            playlists: playlists?.slice(0, 5).map(p => p.name) || [],
+            stats: {
+                totalHeavyRotation: heavyRotation?.length || 0,
+                totalRecentlyPlayed: recentlyPlayed?.length || 0,
+                totalPlaylists: playlists?.length || 0,
+                totalLibrarySongs: librarySongs?.length || 0,
+            },
+            service: 'apple'
+        };
+
+        res.json({ roast, dataSummary });
+
+    } catch (error) {
+        console.error("Apple Roast Error:", error);
+        res.status(500).json({ error: "Failed to generate roast" });
+    }
+});
+
 // Health check
 app.get("/api/health", (req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`\n🎵 Spotify Music Roaster API is running!\n`);
+    console.log(`\n🎵 Music Taste Roaster API is running!\n`);
     console.log(`   Local:   http://127.0.0.1:${PORT}`);
     console.log(`   Network: http://${LOCAL_IP}:${PORT}\n`);
-    console.log(`   Redirect URI: ${REDIRECT_URI}`);
+    console.log(`   Services: Spotify${APPLE_TEAM_ID ? ' + Apple Music' : ''}`);
+    console.log(`   Spotify Redirect URI: ${REDIRECT_URI}`);
     console.log(`   (Make sure this is added to your Spotify app settings)\n`);
 });
