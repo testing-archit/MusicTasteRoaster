@@ -60,6 +60,44 @@ const RoastDisplay = () => {
         navigate('/');
     };
 
+    const [copied, setCopied] = useState(false);
+
+    const handleCopyRoast = () => {
+        navigator.clipboard.writeText(roast);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleShareTwitter = () => {
+        const text = `Just got my music taste roasted! 🔥\n\nGet yours at: ${window.location.origin}`;
+        window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+    };
+
+    const handleShareWhatsApp = () => {
+        const text = `Just got my music taste brutally roasted! 🔥😂\n\nGet yours at: ${window.location.origin}`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    };
+
+    const handleDownloadScreenshot = async () => {
+        try {
+            // Use html2canvas if available, otherwise show instruction
+            if (typeof html2canvas === 'undefined') {
+                alert('📸 To download: Take a screenshot using your device (Cmd+Shift+4 on Mac, Win+Shift+S on Windows)');
+                return;
+            }
+            // If html2canvas is loaded, use it
+            const element = document.querySelector('.roast-card');
+            const canvas = await html2canvas(element);
+            const link = document.createElement('a');
+            link.download = 'my-music-roast.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        } catch (error) {
+            alert('📸 To download: Take a screenshot using your device!');
+        }
+    };
+
+
     if (loading) {
         return (
             <motion.div
@@ -263,6 +301,80 @@ const RoastDisplay = () => {
                     )}
                 </motion.div>
             )}
+
+            {/* Share Buttons */}
+            <motion.div
+                style={{
+                    marginTop: '2rem',
+                    display: 'flex',
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                    justifyContent: 'center',
+                }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7 }}
+            >
+                <motion.button
+                    className="btn"
+                    onClick={handleCopyRoast}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                        background: copied ? '#10b981' : 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        padding: '0.75rem 1.5rem',
+                        fontSize: '0.9rem',
+                    }}
+                >
+                    {copied ? '✓ Copied!' : '📋 Copy Roast'}
+                </motion.button>
+
+                <motion.button
+                    className="btn"
+                    onClick={handleShareTwitter}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                        background: 'rgba(29, 161, 242, 0.2)',
+                        border: '1px solid rgba(29, 161, 242, 0.4)',
+                        padding: '0.75rem 1.5rem',
+                        fontSize: '0.9rem',
+                    }}
+                >
+                    🐦 Share on Twitter
+                </motion.button>
+
+                <motion.button
+                    className="btn"
+                    onClick={handleShareWhatsApp}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                        background: 'rgba(37, 211, 102, 0.2)',
+                        border: '1px solid rgba(37, 211, 102, 0.4)',
+                        padding: '0.75rem 1.5rem',
+                        fontSize: '0.9rem',
+                    }}
+                >
+                    💬 Share on WhatsApp
+                </motion.button>
+
+                <motion.button
+                    className="btn"
+                    onClick={handleDownloadScreenshot}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    style={{
+                        background: 'rgba(168, 85, 247, 0.2)',
+                        border: '1px solid rgba(168, 85, 247, 0.4)',
+                        padding: '0.75rem 1.5rem',
+                        fontSize: '0.9rem',
+                    }}
+                >
+                    📸 Screenshot
+                </motion.button>
+            </motion.div>
 
             <motion.button
                 className="btn btn-secondary"
