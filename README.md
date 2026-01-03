@@ -1,12 +1,12 @@
 # 🔥 Music Taste Roaster (v2.0)
 
-A brutally honest AI-powered app that roasts your music taste. Now supporting both **Spotify** and **Apple Music**!
+A brutally honest AI-powered app that roasts your Spotify music taste using Google's Gemini AI.
 
-This app connects to your music service, analyzes your listening habits (top artists, tracks, etc.), and uses Google's Gemini AI to generate a savage, personalized roast in a mix of Hindi and English.
+This app connects to your Spotify account, analyzes your listening habits (top artists, tracks, playlists, etc.), and uses Google's Gemini AI to generate a savage, personalized roast in a mix of Hindi and English.
 
 ## ✨ Features
 
-- **🎵 Dual-Platform Support** - Connects to either your Spotify or Apple Music account.
+- **🎵 Spotify Integration** - Connects to your Spotify account to analyze your music taste.
 - **🤖 AI-Powered Roasts** - Uses Google Gemini to generate unique, personalized roasts.
 - **🇮🇳 Desi Style** - Roasts come in a mix of Hindi and English (Hinglish) for that extra burn.
 - **📊 Data Summary** - Shows you the data that was used to generate your roast.
@@ -16,9 +16,10 @@ This app connects to your music service, analyzes your listening habits (top art
 ## 🛠️ Tech Stack
 
 - **Frontend:** React, Vite, React Router, Framer Motion
-- **Backend:** Node.js, Express
-- **APIs:** Spotify Web API, Apple Music API (via MusicKit JS), Google Gemini AI
-- **Authentication:** OAuth 2.0 (for Spotify), JWT (for Apple Music)
+- **Backend:** Node.js (Bun runtime), Express
+- **APIs:** Spotify Web API, Google Gemini AI
+- **Authentication:** OAuth 2.0
+- **Runtime:** Bun
 
 ## 🚀 Getting Started
 
@@ -31,10 +32,10 @@ cd MusicTasteRoaster
 
 ### 2. Install dependencies
 
-This project uses `npm` for package management.
+This project uses Bun for package management and runtime.
 
 ```bash
-npm install
+bun install
 ```
 
 ### 3. Create a `.env` file
@@ -46,34 +47,21 @@ Create a file named `.env` in the root of the project and add the following envi
 # Get your Gemini API key from Google AI Studio
 GEMINI_API_KEY="your_gemini_api_key"
 
-# --- SPOTIFY SETUP (Optional) ---
+# --- SPOTIFY SETUP ---
 # 1. Go to https://developer.spotify.com/dashboard
 # 2. Create a new app.
 # 3. Add a redirect URI: http://127.0.0.1:3000/callback
 # 4. Copy your Client ID and Client Secret here.
 SPOTIFY_CLIENT_ID="your_spotify_client_id"
 SPOTIFY_CLIENT_SECRET="your_spotify_client_secret"
-
-# --- APPLE MUSIC SETUP (Optional) ---
-# 1. Go to https://developer.apple.com/account/resources/authkeys/list
-# 2. Create a new key with "MusicKit" enabled.
-# 3. Download the .p8 key file.
-# 4. Note your Key ID and Team ID.
-APPLE_TEAM_ID="your_apple_team_id"
-APPLE_KEY_ID="your_apple_key_id"
-# Paste the entire content of the .p8 file here, preserving newlines.
-# It should start with -----BEGIN PRIVATE KEY-----
-APPLE_PRIVATE_KEY="your_apple_private_key"
 ```
-
-**Note:** You only need to set up the variables for the service(s) you want to test. The app will still run if one set of keys is missing.
 
 ### 4. Run the development server
 
-This command will start both the React frontend and the Node.js backend concurrently.
+This command will start both the React frontend and the Bun backend concurrently.
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 The app will be available at `http://localhost:5173`.
@@ -81,21 +69,13 @@ The app will be available at `http://localhost:5173`.
 ## 🤔 How It Works
 
 ### Spotify Flow
-1.  User clicks "Continue with Spotify".
-2.  The app redirects to Spotify for authentication (OAuth 2.0).
-3.  After authorization, Spotify redirects back to the server.
-4.  The server fetches a comprehensive set of the user's music data (top tracks/artists, recently played, etc.).
-5.  This data is sent to the Gemini AI with a carefully crafted "roast" prompt.
-6.  The AI generates a brutal, personalized roast.
-7.  The server redirects the user to the frontend, where the roast is displayed.
-
-### Apple Music Flow
-1.  User clicks "Continue with Apple Music".
-2.  The frontend prompts the user to authorize via the official MusicKit JS popup.
-3.  Once authorized, the frontend fetches the user's music data directly from Apple's APIs.
-4.  This data is then sent to our backend server.
-5.  The backend sends the data to the Gemini AI for roasting.
-6.  The backend returns the generated roast to the frontend, where it is displayed.
+1. User clicks "Continue with Spotify".
+2. The app redirects to Spotify for authentication (OAuth 2.0).
+3. After authorization, Spotify redirects back to the server.
+4. The server fetches a comprehensive set of the user's music data (top tracks/artists, recently played, etc.).
+5. This data is sent to the Gemini AI with a carefully crafted "roast" prompt.
+6. The AI generates a brutal, personalized roast.
+7. The server redirects the user to the frontend, where the roast is displayed.
 
 ---
 

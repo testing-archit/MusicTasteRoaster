@@ -6,7 +6,6 @@ import LoadingScreen from './components/LoadingScreen';
 import RoastDisplay from './components/RoastDisplay';
 import ErrorMessage from './components/ErrorMessage';
 import BackgroundOrbs from './components/BackgroundOrbs';
-import AppleMusicAuth from './components/AppleMusicAuth';
 
 function App() {
     return (
@@ -19,7 +18,6 @@ function App() {
                     <Route path="/loading" element={<LoadingScreen />} />
                     <Route path="/roast" element={<RoastDisplay />} />
                     <Route path="/error" element={<ErrorMessage />} />
-                    <Route path="/apple-auth" element={<AppleMusicAuth />} />
                 </Routes>
             </AnimatePresence>
         </div>
